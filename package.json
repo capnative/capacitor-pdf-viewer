@@ -1,6 +1,6 @@
 {
   "name": "@capnative/capacitor-pdf-viewer",
-  "version": "8.0.1",
+  "version": "8.0.2",
   "description": "Open PDF files in an in-app viewer from Capacitor",
   "main": "dist/plugin.cjs.js",
   "module": "dist/esm/index.js",
