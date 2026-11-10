@@ -11,14 +11,69 @@ import org.json.JSONObject
 @CapacitorPlugin(name = "PdfViewer")
 class PdfViewerPlugin : Plugin() {
     @PluginMethod
-    fun open(call: PluginCall) {
-        val request = try {
-            PdfRequests.parse(
+    fun openUrl(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseUrl(
                 url = rawOption(call, "url"),
                 title = rawOption(call, "title"),
                 page = rawOption(call, "page"),
                 headers = readHeaders(call),
             )
+        }
+    }
+
+    @PluginMethod
+    fun openFile(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseFile(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openCapacitorFile(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseCapacitorFile(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openPath(call: PluginCall) {
+        open(call) {
+            PdfRequests.parsePath(rawOption(call, "path"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openContent(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseContent(rawOption(call, "uri"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openWebPath(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseWebPath(rawOption(call, "path"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openBlob(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseBlob(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    @PluginMethod
+    fun openData(call: PluginCall) {
+        open(call) {
+            PdfRequests.parseData(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
+        }
+    }
+
+    private fun open(call: PluginCall, parse: () -> PdfOpenRequest) {
+        val request = try {
+            parse()
         } catch (error: PdfRequestException) {
             call.reject(error.message ?: "The PDF could not be opened.", error.code)
             return

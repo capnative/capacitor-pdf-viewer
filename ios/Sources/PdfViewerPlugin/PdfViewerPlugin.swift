@@ -6,14 +6,102 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "PdfViewerPlugin"
     public let jsName = "PdfViewer"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "open", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openCapacitorFile", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openPath", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openContent", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openWebPath", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openBlob", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openData", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
 
     private var viewer: PdfViewerViewController?
     private var pendingCall: CAPPluginCall?
 
-    @objc func open(_ call: CAPPluginCall) {
+    @objc func openUrl(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseUrl(
+                url: call.getValue("url"),
+                title: call.getValue("title"),
+                page: call.getValue("page"),
+                headers: try self.headerDictionary(from: call)
+            )
+        }
+    }
+
+    @objc func openFile(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseFile(
+                url: call.getValue("url"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openCapacitorFile(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseCapacitorFile(
+                url: call.getValue("url"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openPath(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parsePath(
+                path: call.getValue("path"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openContent(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseContent(
+                uri: call.getValue("uri"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openWebPath(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseWebPath(
+                path: call.getValue("path"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openBlob(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseBlob(
+                url: call.getValue("url"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    @objc func openData(_ call: CAPPluginCall) {
+        present(call) {
+            try PdfOpenRequest.parseData(
+                url: call.getValue("url"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+        }
+    }
+
+    private func present(_ call: CAPPluginCall, _ makeRequest: @escaping () throws -> PdfOpenRequest) {
         DispatchQueue.main.async { [weak self] in
             guard let self else {
                 call.reject("The viewer could not be presented.", "UNAVAILABLE")
@@ -24,12 +112,7 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             do {
-                let request = try PdfOpenRequest.parse(
-                    url: call.getValue("url"),
-                    title: call.getValue("title"),
-                    page: call.getValue("page"),
-                    headers: try self.headerDictionary(from: call)
-                )
+                let request = try makeRequest()
                 guard let presenter = self.topViewController(from: self.bridge?.viewController) else {
                     call.reject("The viewer could not be presented.", "UNAVAILABLE")
                     return

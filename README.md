@@ -38,7 +38,7 @@ const closed = await PdfViewer.addListener('closed', (event) => {
   console.log(`Closed on page ${event.page}`);
 });
 
-await PdfViewer.open({
+await PdfViewer.openUrl({
   url: 'https://example.com/manual.pdf',
   title: 'Manual',
   page: 2,
@@ -51,7 +51,7 @@ await PdfViewer.close();
 await closed.remove();
 ```
 
-A file from `@capacitor/filesystem` can be opened with the URI that plugin returns:
+Each source has its own method. Pass a `file://` URI from `@capacitor/filesystem` to `openFile()`:
 
 ```typescript
 import { Directory, Filesystem } from '@capacitor/filesystem';
@@ -62,10 +62,23 @@ const { uri } = await Filesystem.getUri({
   directory: Directory.Documents,
 });
 
-await PdfViewer.open({ url: uri });
+await PdfViewer.openFile({ url: uri });
 ```
 
-`open()` resolves when the first page is visible. It rejects if the file cannot be loaded or a viewer is already open. Call `close()` and wait for `closed` before opening another document.
+| Method | Source | Platforms |
+| --- | --- | --- |
+| `openUrl` | `http:` and `https:` | iOS, Android, Web |
+| `openFile` | `file://` | iOS, Android |
+| `openCapacitorFile` | Capacitor URL containing `_capacitor_file_` | iOS, Android |
+| `openPath` | Absolute filesystem path | iOS, Android |
+| `openContent` | `content://` | Android |
+| `openWebPath` | Root-relative (`/files/a.pdf`) or dot-relative (`./a.pdf`) URL | Web |
+| `openBlob` | `blob:` | Web |
+| `openData` | `data:` | Web |
+
+A method rejects with `INVALID_SOURCE` when the value is the wrong kind. Calling a method on a platform that cannot open that source rejects with `UNAVAILABLE`.
+
+Every open method resolves when the first page is visible. It rejects if the file cannot be loaded or a viewer is already open. Call `close()` and wait for `closed` before opening another document.
 
 ## Platform setup
 
@@ -75,7 +88,7 @@ No extra Capacitor config block is required.
 
 The viewer is a presented `UINavigationController` hosting a PDFKit `PDFView`. Pinch-zoom, continuous vertical scrolling, and page navigation come from PDFKit. The navigation bar has Done, a search field, and the system share sheet. Search jumps between case-insensitive matches.
 
-The plugin does not add `Info.plist` keys. Remote `https` URLs work with the default App Transport Security policy. Plain `http` URLs need an App Transport Security exception in the host app. Local files must already be readable by the app sandbox (app documents, cache, or a file the app has security-scoped access to). `content://` URIs are not supported on iOS.
+The plugin does not add `Info.plist` keys. `openUrl()` with `https` works with the default App Transport Security policy. Plain `http` needs an App Transport Security exception in the host app. `openFile()`, `openCapacitorFile()`, and `openPath()` require a file the app sandbox can already read (app documents, cache, or a file the app has security-scoped access to). `openContent()` is not supported on iOS.
 
 Minimum version is iOS 15.
 
@@ -85,23 +98,30 @@ The viewer is an in-app `Activity`. It uses the platform `android.graphics.pdf.P
 
 `androidx.pdf:pdf-viewer-fragment` was considered and not used. As of the 1.0.0-beta01 release it is still beta, and it requires a higher minimum SDK than Capacitor 8 (API 24). `PdfRenderer` keeps the plugin free of extra native libraries and runs on every Android version Capacitor supports. The activity renders the current page to a bitmap (up to 2× the screen width, capped for memory), then supports pinch-zoom, pan, previous/next, horizontal swipes, and share. Text search is not available from `PdfRenderer`; search is iOS-only.
 
-The plugin manifest merges `android.permission.INTERNET` and a `FileProvider` used only for the share sheet (`${applicationId}.pdfviewer.fileprovider`). Capacitor apps already include `INTERNET`. Plain `http` URLs also need the host app to allow cleartext traffic. `content://` URIs are copied into the app cache and require a URI the app is allowed to read. Absolute paths are limited to files the app can already read under scoped storage.
+The plugin manifest merges `android.permission.INTERNET` and a `FileProvider` used only for the share sheet (`${applicationId}.pdfviewer.fileprovider`). Capacitor apps already include `INTERNET`. Plain `http` URLs passed to `openUrl()` also need the host app to allow cleartext traffic. `openContent()` copies the `content://` URI into the app cache and requires a URI the app is allowed to read. `openPath()` is limited to files the app can already read under scoped storage.
 
 Minimum version is API 24.
 
 ### Web
 
-`open()` installs a full-screen overlay with the PDF in an iframe, plus Done and Open. Open leaves the overlay in place and loads the original URL in a new tab, which is the fallback when a browser will not paint a PDF inside a frame.
+`openUrl()`, `openWebPath()`, `openBlob()`, and `openData()` install a full-screen overlay with the PDF in an iframe, plus Done and Open. Open leaves the overlay in place and loads the original URL in a new tab, which is the fallback when a browser will not paint a PDF inside a frame.
 
-Remote files are downloaded with `fetch` so `headers` are applied, then displayed from a blob URL. If that fetch fails and no custom headers were set, the original URL is embedded directly. Custom headers cannot be applied when the server does not allow the cross-origin fetch. `pageChanged` is not emitted on the web. A leading `/` is a same-origin URL path on the web and a filesystem path on iOS and Android.
+`openUrl()` downloads the file with `fetch` so `headers` are applied, then displays it from a blob URL. If that fetch fails and no custom headers were set, the original URL is embedded directly. Custom headers cannot be applied when the server does not allow the cross-origin fetch. `openWebPath()`, `openBlob()`, and `openData()` embed the source directly. `pageChanged` is not emitted on the web. A root-relative path belongs to `openWebPath()`; an absolute filesystem path belongs to `openPath()`.
 
-`file://`, `content://`, and Capacitor `_capacitor_file_` URLs reject with `UNAVAILABLE` on the web.
+`openFile()`, `openCapacitorFile()`, `openPath()`, and `openContent()` reject with `UNAVAILABLE` on the web.
 
 ## API
 
 <docgen-index>
 
-* [`open(...)`](#open)
+* [`openUrl(...)`](#openurl)
+* [`openFile(...)`](#openfile)
+* [`openCapacitorFile(...)`](#opencapacitorfile)
+* [`openPath(...)`](#openpath)
+* [`openContent(...)`](#opencontent)
+* [`openWebPath(...)`](#openwebpath)
+* [`openBlob(...)`](#openblob)
+* [`openData(...)`](#opendata)
 * [`close()`](#close)
 * [`addListener('closed', ...)`](#addlistenerclosed-)
 * [`addListener('pageChanged', ...)`](#addlistenerpagechanged-)
@@ -114,26 +134,146 @@ Remote files are downloaded with `fetch` so `headers` are applied, then displaye
 <docgen-api>
 <!--Update the source file JSDoc comments and rerun docgen to update the docs below-->
 
-### open(...)
+### openUrl(...)
 
 ```typescript
-open(options: OpenOptions) => Promise<void>
+openUrl(options: OpenUrlOptions) => Promise<void>
 ```
 
-Open a PDF in a full-screen in-app viewer.
+Open an `http:` or `https:` PDF in a full-screen in-app viewer.
 
 Resolves once the first page is visible. Rejects if the file cannot be
 loaded, the requested page does not exist, or a viewer is already open.
-Dismiss the current viewer with `close()` before calling `open()` again.
+Dismiss the current viewer with `close()` before opening another document.
 
 On iOS the viewer is a PDFKit `PDFView` with pinch-zoom, continuous
 scrolling, text search, and the system share sheet. On Android it is an
 in-app `PdfRenderer` activity with pinch-zoom, pan, page controls, and
-share. On the web it is a full-screen iframe overlay.
+share. On the web it is a full-screen iframe overlay. The file is
+downloaded with `headers` before it is shown.
 
-| Param         | Type                                                |
-| ------------- | --------------------------------------------------- |
-| **`options`** | <code><a href="#openoptions">OpenOptions</a></code> |
+| Param         | Type                                                      |
+| ------------- | --------------------------------------------------------- |
+| **`options`** | <code><a href="#openurloptions">OpenUrlOptions</a></code> |
+
+--------------------
+
+
+### openFile(...)
+
+```typescript
+openFile(options: OpenFileOptions) => Promise<void>
+```
+
+Open a `file://` PDF.
+
+iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#openfileoptions">OpenFileOptions</a></code> |
+
+--------------------
+
+
+### openCapacitorFile(...)
+
+```typescript
+openCapacitorFile(options: OpenCapacitorFileOptions) => Promise<void>
+```
+
+Open a Capacitor converted file URL containing `_capacitor_file_`.
+
+iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+
+| Param         | Type                                                                          |
+| ------------- | ----------------------------------------------------------------------------- |
+| **`options`** | <code><a href="#opencapacitorfileoptions">OpenCapacitorFileOptions</a></code> |
+
+--------------------
+
+
+### openPath(...)
+
+```typescript
+openPath(options: OpenPathOptions) => Promise<void>
+```
+
+Open a PDF from an absolute filesystem path.
+
+iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#openpathoptions">OpenPathOptions</a></code> |
+
+--------------------
+
+
+### openContent(...)
+
+```typescript
+openContent(options: OpenContentOptions) => Promise<void>
+```
+
+Open a PDF from an Android `content://` URI.
+
+Android only. Rejects with `UNAVAILABLE` on iOS and web.
+
+| Param         | Type                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| **`options`** | <code><a href="#opencontentoptions">OpenContentOptions</a></code> |
+
+--------------------
+
+
+### openWebPath(...)
+
+```typescript
+openWebPath(options: OpenWebPathOptions) => Promise<void>
+```
+
+Open a root-relative or dot-relative PDF URL in the web viewer.
+
+Web only. Rejects with `UNAVAILABLE` on iOS and Android.
+
+| Param         | Type                                                              |
+| ------------- | ----------------------------------------------------------------- |
+| **`options`** | <code><a href="#openwebpathoptions">OpenWebPathOptions</a></code> |
+
+--------------------
+
+
+### openBlob(...)
+
+```typescript
+openBlob(options: OpenBlobOptions) => Promise<void>
+```
+
+Open a `blob:` PDF URL in the web viewer.
+
+Web only. Rejects with `UNAVAILABLE` on iOS and Android.
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#openbloboptions">OpenBlobOptions</a></code> |
+
+--------------------
+
+
+### openData(...)
+
+```typescript
+openData(options: OpenDataOptions) => Promise<void>
+```
+
+Open a `data:` PDF URL in the web viewer.
+
+Web only. Rejects with `UNAVAILABLE` on iOS and Android.
+
+| Param         | Type                                                        |
+| ------------- | ----------------------------------------------------------- |
+| **`options`** | <code><a href="#opendataoptions">OpenDataOptions</a></code> |
 
 --------------------
 
@@ -162,7 +302,7 @@ addListener(eventName: 'closed', listenerFunc: (event: ViewerClosedEvent) => voi
 Listen for the viewer closing.
 
 Fires after a presented viewer is dismissed, including when `close()` is
-called. It does not fire if `open()` rejects before the document is shown.
+called. It does not fire if the open call rejects before the document is shown.
 
 | Param              | Type                                                                                |
 | ------------------ | ----------------------------------------------------------------------------------- |
@@ -208,16 +348,93 @@ Remove all listeners registered by this plugin.
 ### Interfaces
 
 
-#### OpenOptions
+#### OpenUrlOptions
 
-Options for `PdfViewer.open()`.
+Options for `PdfViewer.openUrl()`.
 
-| Prop          | Type                                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                           | Default        |
-| ------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **`url`**     | <code>string</code>                                             | PDF to display. Accepts an `http:` or `https:` URL, a `file://` URI, a Capacitor converted file URL containing `_capacitor_file_`, or an absolute filesystem path. Android also accepts `content://` URIs. On the web, a root-relative (`/files/a.pdf`) or dot-relative (`./a.pdf`) URL is embedded directly, and `blob:` / `data:` URLs are supported. A leading `/` is a filesystem path on iOS and Android, and a same-origin URL path on the web. |                |
-| **`title`**   | <code>string</code>                                             | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                                                                                                                                                                                                                                                                                                                               |                |
-| **`page`**    | <code>number</code>                                             | 1-based page to show first.                                                                                                                                                                                                                                                                                                                                                                                                                           | <code>1</code> |
-| **`headers`** | <code><a href="#record">Record</a>&lt;string, string&gt;</code> | Extra HTTP headers sent when downloading a remote PDF. Ignored for local files. Names must be HTTP header tokens and values must be strings without CR or LF. On the web, headers are only applied when the browser can `fetch` the file (CORS).                                                                                                                                                                                                      |                |
+| Prop          | Type                                                            | Description                                                                                                                                                                                                        | Default        |
+| ------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------- |
+| **`url`**     | <code>string</code>                                             | Remote PDF. Must be an `http:` or `https:` URL. Plain `http` needs an App Transport Security exception on iOS and cleartext traffic allowed on Android.                                                            |                |
+| **`title`**   | <code>string</code>                                             | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                                                                                            |                |
+| **`page`**    | <code>number</code>                                             | 1-based page to show first.                                                                                                                                                                                        | <code>1</code> |
+| **`headers`** | <code><a href="#record">Record</a>&lt;string, string&gt;</code> | Extra HTTP headers sent when downloading the PDF. Names must be HTTP header tokens and values must be strings without CR or LF. On the web, headers are only applied when the browser can `fetch` the file (CORS). |                |
+
+
+#### OpenFileOptions
+
+Options for `PdfViewer.openFile()`.
+
+| Prop        | Type                | Description                                                                                       | Default        |
+| ----------- | ------------------- | ------------------------------------------------------------------------------------------------- | -------------- |
+| **`url`**   | <code>string</code> | Local PDF as a `file://` URI. iOS and Android only. The file must already be readable by the app. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.           |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                       | <code>1</code> |
+
+
+#### OpenCapacitorFileOptions
+
+Options for `PdfViewer.openCapacitorFile()`.
+
+| Prop        | Type                | Description                                                                                                                              | Default        |
+| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`url`**   | <code>string</code> | Local PDF as a Capacitor converted file URL. The URL must contain `_capacitor_file_` followed by an absolute path. iOS and Android only. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                  |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                              | <code>1</code> |
+
+
+#### OpenPathOptions
+
+Options for `PdfViewer.openPath()`.
+
+| Prop        | Type                | Description                                                                                                                                                    | Default        |
+| ----------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`path`**  | <code>string</code> | Absolute filesystem path, such as `/var/mobile/Documents/report.pdf`. iOS and Android only. A leading `/` is not a website path; use `openWebPath()` for that. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                                        |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                                                    | <code>1</code> |
+
+
+#### OpenContentOptions
+
+Options for `PdfViewer.openContent()`.
+
+| Prop        | Type                | Description                                                                                                                  | Default        |
+| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`uri`**   | <code>string</code> | Android `content://` URI the app is allowed to read. Android only. The file is copied into the app cache before it is shown. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                      |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                  | <code>1</code> |
+
+
+#### OpenWebPathOptions
+
+Options for `PdfViewer.openWebPath()`.
+
+| Prop        | Type                | Description                                                                                                          | Default        |
+| ----------- | ------------------- | -------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`path`**  | <code>string</code> | Same-origin path on the web. A root-relative (`/files/a.pdf`) or dot-relative (`./a.pdf`, `../a.pdf`) URL. Web only. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                              |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                          | <code>1</code> |
+
+
+#### OpenBlobOptions
+
+Options for `PdfViewer.openBlob()`.
+
+| Prop        | Type                | Description                                                                             | Default        |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------- | -------------- |
+| **`url`**   | <code>string</code> | `blob:` URL. Web only.                                                                  |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name. |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                             | <code>1</code> |
+
+
+#### OpenDataOptions
+
+Options for `PdfViewer.openData()`.
+
+| Prop        | Type                | Description                                                                             | Default        |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------- | -------------- |
+| **`url`**   | <code>string</code> | `data:` URL. Web only.                                                                  |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name. |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                             | <code>1</code> |
 
 
 #### PluginListenerHandle
@@ -266,14 +483,14 @@ Rejected calls include a stable `error.code`. Match on `code`, not on the messag
 
 | Code | Platforms | Meaning |
 | ---- | --------- | ------- |
-| `INVALID_SOURCE` | iOS, Android, Web | `url` is missing, empty, or uses an unsupported scheme for that platform. `title` must be a string when it is set. |
+| `INVALID_SOURCE` | iOS, Android, Web | The source is missing, empty, or not the kind that method accepts. `title` must be a string when it is set. |
 | `INVALID_PAGE` | iOS, Android, Web | `page` is not an integer greater than or equal to 1, or it is past the last page. |
 | `INVALID_HEADERS` | iOS, Android, Web | `headers` is not a string map, or a name or value is not a safe HTTP header. |
 | `LOAD_ERROR` | iOS, Android, Web | The file could not be downloaded, read, or parsed, or it is larger than 200 MB. |
 | `PASSWORD_PROTECTED` | iOS, Android | The PDF requires a password. Password entry is not supported yet. |
-| `ALREADY_OPEN` | iOS, Android, Web | `open()` was called while a viewer is already open. |
+| `ALREADY_OPEN` | iOS, Android, Web | An open method was called while a viewer is already open. |
 | `CANCELLED` | iOS, Android, Web | The viewer was dismissed before the document finished loading. |
-| `UNAVAILABLE` | iOS, Android, Web | The viewer cannot be presented, or the source is not supported on that platform. |
+| `UNAVAILABLE` | iOS, Android, Web | The viewer cannot be presented, or that open method is not supported on that platform. |
 
 ## Limitations
 

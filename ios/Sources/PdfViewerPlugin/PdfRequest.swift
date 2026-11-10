@@ -19,6 +19,10 @@ struct PdfViewerError: Error, Equatable {
         PdfViewerError(code: "INVALID_HEADERS", message: message)
     }
 
+    static func unavailable(_ message: String) -> PdfViewerError {
+        PdfViewerError(code: "UNAVAILABLE", message: message)
+    }
+
     static func loadFailed(_ message: String) -> PdfViewerError {
         PdfViewerError(code: "LOAD_ERROR", message: message)
     }
@@ -50,34 +54,168 @@ struct PdfOpenRequest: Equatable {
         return name.isEmpty ? "PDF" : name
     }
 
-    static func parse(
+    static func parseUrl(
         url rawURL: Any?,
         title rawTitle: Any?,
         page rawPage: Any?,
         headers rawHeaders: Any?
     ) throws -> PdfOpenRequest {
-        let url = try readURL(rawURL)
-        return PdfOpenRequest(
-            source: try classify(url),
+        let url = try readString(rawURL, name: "url")
+        if url.contains(capacitorFileMarker) || !isHttpURL(url) {
+            throw PdfViewerError.invalidSource("url must be an http: or https: URL.")
+        }
+        guard let parsed = URL(string: url) else {
+            throw PdfViewerError.invalidSource("url must be an http: or https: URL.")
+        }
+        return try make(
+            source: .remote(parsed),
+            title: rawTitle,
+            page: rawPage,
+            headers: try readHeaders(rawHeaders)
+        )
+    }
+
+    static func parseFile(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let url = try readString(rawURL, name: "url")
+        guard schemeOf(url) == "file", let parsed = URL(string: url) else {
+            throw PdfViewerError.invalidSource("url must be a file:// URI.")
+        }
+        if parsed.path.isEmpty {
+            throw PdfViewerError.invalidSource("The file:// URI could not be parsed.")
+        }
+        return try make(
+            source: .localFile(URL(fileURLWithPath: parsed.path)),
+            title: rawTitle,
+            page: rawPage,
+            headers: [:]
+        )
+    }
+
+    static func parseCapacitorFile(
+        url rawURL: Any?,
+        title rawTitle: Any?,
+        page rawPage: Any?
+    ) throws -> PdfOpenRequest {
+        let url = try readString(rawURL, name: "url")
+        guard let marker = url.range(of: capacitorFileMarker) else {
+            throw PdfViewerError.invalidSource("url must be a Capacitor file URL containing _capacitor_file_.")
+        }
+        let rawPath = String(url[marker.upperBound...])
+        let cut = rawPath.components(separatedBy: "?").first?.components(separatedBy: "#").first ?? rawPath
+        let path = cut.removingPercentEncoding ?? cut
+        guard path.hasPrefix("/") else {
+            throw PdfViewerError.invalidSource("The Capacitor file URL did not contain an absolute path.")
+        }
+        return try make(
+            source: .localFile(URL(fileURLWithPath: path)),
+            title: rawTitle,
+            page: rawPage,
+            headers: [:]
+        )
+    }
+
+    static func parsePath(path rawPath: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let path = try readString(rawPath, name: "path")
+        guard path.hasPrefix("/"), !path.hasPrefix("//") else {
+            throw PdfViewerError.invalidSource("path must be an absolute filesystem path.")
+        }
+        return try make(
+            source: .localFile(URL(fileURLWithPath: path)),
+            title: rawTitle,
+            page: rawPage,
+            headers: [:]
+        )
+    }
+
+    static func parseContent(uri rawURI: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let uri = try readString(rawURI, name: "uri")
+        guard schemeOf(uri) == "content" else {
+            throw PdfViewerError.invalidSource("uri must be a content:// URI.")
+        }
+        _ = try readTitle(rawTitle)
+        _ = try readPage(rawPage)
+        throw PdfViewerError.unavailable("content:// URIs are only supported on Android.")
+    }
+
+    static func parseWebPath(path rawPath: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let path = try readString(rawPath, name: "path")
+        guard isWebPath(path) else {
+            throw PdfViewerError.invalidSource(
+                "path must be a root-relative (/files/a.pdf) or dot-relative (./a.pdf) URL."
+            )
+        }
+        _ = try readTitle(rawTitle)
+        _ = try readPage(rawPage)
+        throw PdfViewerError.unavailable("Web paths are only supported on the web.")
+    }
+
+    static func parseBlob(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let url = try readString(rawURL, name: "url")
+        guard schemeOf(url) == "blob" else {
+            throw PdfViewerError.invalidSource("url must be a blob: URL.")
+        }
+        _ = try readTitle(rawTitle)
+        _ = try readPage(rawPage)
+        throw PdfViewerError.unavailable("blob: URLs are only supported on the web.")
+    }
+
+    static func parseData(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let url = try readString(rawURL, name: "url")
+        guard schemeOf(url) == "data" else {
+            throw PdfViewerError.invalidSource("url must be a data: URL.")
+        }
+        _ = try readTitle(rawTitle)
+        _ = try readPage(rawPage)
+        throw PdfViewerError.unavailable("data: URLs are only supported on the web.")
+    }
+
+    private static func make(
+        source: Source,
+        title rawTitle: Any?,
+        page rawPage: Any?,
+        headers: [String: String]
+    ) throws -> PdfOpenRequest {
+        PdfOpenRequest(
+            source: source,
             title: try readTitle(rawTitle),
             page: try readPage(rawPage),
-            headers: try readHeaders(rawHeaders)
+            headers: headers
         )
     }
 }
 
 private let capacitorFileMarker = "/_capacitor_file_"
 private let headerNamePattern = "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$"
+private let schemePattern = "^([a-zA-Z][a-zA-Z0-9+.-]*):"
 private let pageMessage = "page must be an integer greater than or equal to 1."
 
-private func readURL(_ value: Any?) throws -> String {
-    guard let url = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) else {
-        throw PdfViewerError.invalidSource("url is required and must be a string.")
+private func readString(_ value: Any?, name: String) throws -> String {
+    guard let text = (value as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) else {
+        throw PdfViewerError.invalidSource("\(name) is required and must be a string.")
     }
-    if url.isEmpty {
-        throw PdfViewerError.invalidSource("url must not be empty.")
+    if text.isEmpty {
+        throw PdfViewerError.invalidSource("\(name) must not be empty.")
     }
-    return url
+    return text
+}
+
+private func schemeOf(_ value: String) -> String? {
+    guard let match = value.range(of: schemePattern, options: .regularExpression) else {
+        return nil
+    }
+    return String(value[match].dropLast()).lowercased()
+}
+
+private func isHttpURL(_ value: String) -> Bool {
+    let scheme = schemeOf(value)
+    return scheme == "http" || scheme == "https"
+}
+
+private func isWebPath(_ value: String) -> Bool {
+    if schemeOf(value) != nil {
+        return false
+    }
+    return (value.hasPrefix("/") && !value.hasPrefix("//")) || value.hasPrefix("./") || value.hasPrefix("../")
 }
 
 private func readTitle(_ value: Any?) throws -> String? {
@@ -151,43 +289,3 @@ private func readHeaders(_ value: Any?) throws -> [String: String] {
     return headers
 }
 
-private func classify(_ url: String) throws -> PdfOpenRequest.Source {
-    if let marker = url.range(of: capacitorFileMarker) {
-        let rawPath = String(url[marker.upperBound...])
-        let cut = rawPath.components(separatedBy: "?").first?.components(separatedBy: "#").first ?? rawPath
-        let path = cut.removingPercentEncoding ?? cut
-        guard path.hasPrefix("/") else {
-            throw PdfViewerError.invalidSource("The Capacitor file URL did not contain an absolute path.")
-        }
-        return .localFile(URL(fileURLWithPath: path))
-    }
-
-    if url.hasPrefix("/"), !url.hasPrefix("//") {
-        return .localFile(URL(fileURLWithPath: url))
-    }
-    if url.hasPrefix("./") || url.hasPrefix("../") {
-        throw PdfViewerError.invalidSource("Relative URLs are only supported on the web.")
-    }
-
-    guard let parsed = URL(string: url), let scheme = parsed.scheme?.lowercased() else {
-        throw PdfViewerError.invalidSource(
-            "url must be an http(s) URL, a file:// URI, or an absolute file path."
-        )
-    }
-
-    switch scheme {
-    case "http", "https":
-        return .remote(parsed)
-    case "file":
-        if parsed.path.isEmpty {
-            throw PdfViewerError.invalidSource("The file:// URI could not be parsed.")
-        }
-        return .localFile(URL(fileURLWithPath: parsed.path))
-    case "content":
-        throw PdfViewerError.invalidSource("content:// URIs are only supported on Android.")
-    case "blob", "data":
-        throw PdfViewerError.invalidSource("blob: and data: URLs are only supported on the web.")
-    default:
-        throw PdfViewerError.invalidSource("The URL scheme \"\(scheme):\" is not supported.")
-    }
-}

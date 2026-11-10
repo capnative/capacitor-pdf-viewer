@@ -1,8 +1,31 @@
 import { WebPlugin } from '@capacitor/core';
 
-import type { OpenOptions, PdfViewerPlugin } from './definitions';
+import type {
+  OpenBlobOptions,
+  OpenCapacitorFileOptions,
+  OpenContentOptions,
+  OpenDataOptions,
+  OpenFileOptions,
+  OpenPathOptions,
+  OpenUrlOptions,
+  OpenWebPathOptions,
+  PdfViewerPlugin,
+} from './definitions';
 import { createPdfViewerError, isPdfViewerError } from './errors';
-import { MAX_PDF_BYTES, parseOpenOptions, viewerTitle, withPageFragment, type ParsedOpenRequest } from './options';
+import {
+  MAX_PDF_BYTES,
+  parseOpenBlob,
+  parseOpenCapacitorFile,
+  parseOpenContent,
+  parseOpenData,
+  parseOpenFile,
+  parseOpenPath,
+  parseOpenUrl,
+  parseOpenWebPath,
+  viewerTitle,
+  withPageFragment,
+  type ParsedOpenRequest,
+} from './options';
 
 const OVERLAY_ID = 'capnative-pdf-viewer';
 
@@ -21,8 +44,43 @@ export class PdfViewerWeb extends WebPlugin implements PdfViewerPlugin {
   private currentPage = 1;
   private previousOverflow = '';
 
-  async open(options: OpenOptions): Promise<void> {
-    const request = parseOpenOptions(options);
+  async openUrl(options: OpenUrlOptions): Promise<void> {
+    await this.present(parseOpenUrl(options));
+  }
+
+  async openFile(options: OpenFileOptions): Promise<void> {
+    parseOpenFile(options);
+    throw createPdfViewerError('UNAVAILABLE', 'file:// URIs are only available on iOS and Android.');
+  }
+
+  async openCapacitorFile(options: OpenCapacitorFileOptions): Promise<void> {
+    parseOpenCapacitorFile(options);
+    throw createPdfViewerError('UNAVAILABLE', 'Capacitor file URLs are only available on iOS and Android.');
+  }
+
+  async openPath(options: OpenPathOptions): Promise<void> {
+    parseOpenPath(options);
+    throw createPdfViewerError('UNAVAILABLE', 'Filesystem paths are only available on iOS and Android.');
+  }
+
+  async openContent(options: OpenContentOptions): Promise<void> {
+    parseOpenContent(options);
+    throw createPdfViewerError('UNAVAILABLE', 'content:// URIs are only supported on Android.');
+  }
+
+  async openWebPath(options: OpenWebPathOptions): Promise<void> {
+    await this.present(parseOpenWebPath(options));
+  }
+
+  async openBlob(options: OpenBlobOptions): Promise<void> {
+    await this.present(parseOpenBlob(options));
+  }
+
+  async openData(options: OpenDataOptions): Promise<void> {
+    await this.present(parseOpenData(options));
+  }
+
+  private async present(request: ParsedOpenRequest): Promise<void> {
     if (typeof document === 'undefined') {
       throw createPdfViewerError('UNAVAILABLE', 'The PDF viewer requires a browser document.');
     }

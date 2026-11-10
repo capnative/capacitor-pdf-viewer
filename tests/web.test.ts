@@ -92,7 +92,7 @@ describe('PdfViewerWeb', () => {
       closed.push(event);
     });
 
-    await viewer.open({
+    await viewer.openUrl({
       url: 'https://example.com/manual.pdf',
       title: 'Manual',
       page: 2,
@@ -122,7 +122,7 @@ describe('PdfViewerWeb', () => {
     vi.stubGlobal('fetch', fetchMock);
     const viewer = new PdfViewerWeb();
 
-    await viewer.open({ url: './docs/guide.pdf', page: 4 });
+    await viewer.openWebPath({ path: './docs/guide.pdf', page: 4 });
 
     expect(fetchMock).not.toHaveBeenCalled();
     const frame = body.children[0]?.children.find((child) => child.tag === 'iframe');
@@ -140,7 +140,7 @@ describe('PdfViewerWeb', () => {
     );
     const viewer = new PdfViewerWeb();
 
-    await viewer.open({ url: 'https://example.com/manual.pdf', page: 1 });
+    await viewer.openUrl({ url: 'https://example.com/manual.pdf', page: 1 });
 
     const frame = body.children[0]?.children.find((child) => child.tag === 'iframe');
     expect(frame?.src).toBe('https://example.com/manual.pdf#page=1');
@@ -158,7 +158,7 @@ describe('PdfViewerWeb', () => {
     const viewer = new PdfViewerWeb();
 
     await expect(
-      viewer.open({ url: 'https://example.com/manual.pdf', headers: { Authorization: 'Bearer token' } }),
+      viewer.openUrl({ url: 'https://example.com/manual.pdf', headers: { Authorization: 'Bearer token' } }),
     ).rejects.toMatchObject({
       code: 'LOAD_ERROR',
     });
@@ -169,13 +169,21 @@ describe('PdfViewerWeb', () => {
     installDocument();
     const viewer = new PdfViewerWeb();
 
-    await expect(viewer.open({ url: 'file:///tmp/a.pdf' })).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(viewer.openFile({ url: 'file:///tmp/a.pdf' })).rejects.toMatchObject({ code: 'UNAVAILABLE' });
+    await expect(viewer.openFile({ url: 'https://example.com/a.pdf' })).rejects.toMatchObject({
+      code: 'INVALID_SOURCE',
+    });
+    await expect(viewer.openContent({ uri: 'content://com.example/docs/1' })).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+    });
 
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => new Response('missing', { status: 404 })),
     );
-    await expect(viewer.open({ url: 'https://example.com/missing.pdf' })).rejects.toMatchObject({ code: 'LOAD_ERROR' });
+    await expect(viewer.openUrl({ url: 'https://example.com/missing.pdf' })).rejects.toMatchObject({
+      code: 'LOAD_ERROR',
+    });
 
     URL.createObjectURL = () => 'blob:ok';
     URL.revokeObjectURL = () => undefined;
@@ -183,8 +191,8 @@ describe('PdfViewerWeb', () => {
       'fetch',
       vi.fn(async () => new Response(new Uint8Array([1]), { status: 200 })),
     );
-    await viewer.open({ url: 'https://example.com/a.pdf' });
-    await expect(viewer.open({ url: 'https://example.com/b.pdf' })).rejects.toMatchObject({ code: 'ALREADY_OPEN' });
+    await viewer.openUrl({ url: 'https://example.com/a.pdf' });
+    await expect(viewer.openUrl({ url: 'https://example.com/b.pdf' })).rejects.toMatchObject({ code: 'ALREADY_OPEN' });
     await viewer.close();
     await expect(viewer.close()).resolves.toBeUndefined();
   });
@@ -207,7 +215,7 @@ describe('PdfViewerWeb', () => {
       closed.push(event);
     });
 
-    const opening = viewer.open({ url: 'https://example.com/slow.pdf' });
+    const opening = viewer.openUrl({ url: 'https://example.com/slow.pdf' });
     const closedCall = viewer.close();
     rejectFetch(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
