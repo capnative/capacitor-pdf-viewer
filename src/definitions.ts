@@ -51,94 +51,45 @@ export interface OpenUrlOptions {
 }
 
 /**
- * Options for `PdfViewer.openFile()`.
+ * Options for `PdfViewer.openUri()`.
  */
-export interface OpenFileOptions {
+export interface OpenUriOptions {
   /**
-   * Local PDF as a `file://` URI.
+   * Local PDF the app is allowed to read.
    *
-   * iOS and Android only. The file must already be readable by the app.
-   */
-  url: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
- * Options for `PdfViewer.openCapacitorFile()`.
- */
-export interface OpenCapacitorFileOptions {
-  /**
-   * Local PDF as a Capacitor converted file URL.
-   *
-   * The URL must contain `_capacitor_file_` followed by an absolute path.
-   * iOS and Android only.
-   */
-  url: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
- * Options for `PdfViewer.openPath()`.
- */
-export interface OpenPathOptions {
-  /**
-   * Absolute filesystem path, such as `/var/mobile/Documents/report.pdf`.
-   *
-   * iOS and Android only.
-   */
-  path: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
- * Options for `PdfViewer.openContent()`.
- */
-export interface OpenContentOptions {
-  /**
-   * Android `content://` URI the app is allowed to read.
-   *
-   * Android only. The file is copied into the app cache before it is shown.
+   * A `file://` URI, an Android `content://` URI, a Capacitor file URL
+   * containing `_capacitor_file_`, or an absolute filesystem path such as
+   * `/var/mobile/Documents/report.pdf`. `content://` URIs are copied into the
+   * app cache on Android and reject with `UNAVAILABLE` on iOS.
    */
   uri: string;
+
+  /**
+   * Title shown in the viewer chrome.
+   *
+   * When omitted or blank, the viewer uses the file name.
+   */
+  title?: string;
+
+  /**
+   * 1-based page to show first.
+   *
+   * @default 1
+   */
+  page?: number;
+}
+
+/**
+ * Options for `PdfViewer.openAsset()`.
+ */
+export interface OpenAssetOptions {
+  /**
+   * PDF shipped with the app, relative to the web asset directory.
+   *
+   * `files/manual.pdf` reads the file at `public/files/manual.pdf` in the app
+   * bundle. A leading slash is ignored. `..` segments are rejected.
+   */
+  path: string;
 
   /**
    * Title shown in the viewer chrome.
@@ -201,32 +152,21 @@ export interface PdfViewerPlugin {
   openUrl(options: OpenUrlOptions): Promise<void>;
 
   /**
-   * Open a `file://` PDF.
+   * Open a local PDF from a URI or an absolute filesystem path.
    *
-   * iOS and Android only.
+   * Resolves once the first page is visible. Rejects if the file cannot be
+   * read, the requested page does not exist, or a viewer is already open.
    */
-  openFile(options: OpenFileOptions): Promise<void>;
+  openUri(options: OpenUriOptions): Promise<void>;
 
   /**
-   * Open a Capacitor converted file URL containing `_capacitor_file_`.
+   * Open a PDF shipped with the app.
    *
-   * iOS and Android only.
+   * The path is relative to the web asset directory. On iOS the file is read
+   * from the app bundle. On Android it is copied out of `assets` before it
+   * is shown.
    */
-  openCapacitorFile(options: OpenCapacitorFileOptions): Promise<void>;
-
-  /**
-   * Open a PDF from an absolute filesystem path.
-   *
-   * iOS and Android only.
-   */
-  openPath(options: OpenPathOptions): Promise<void>;
-
-  /**
-   * Open a PDF from an Android `content://` URI.
-   *
-   * Android only. Rejects with `UNAVAILABLE` on iOS.
-   */
-  openContent(options: OpenContentOptions): Promise<void>;
+  openAsset(options: OpenAssetOptions): Promise<void>;
 
   /**
    * Close the viewer if one is open.

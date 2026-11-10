@@ -32,6 +32,7 @@ struct PdfOpenRequest: Equatable {
     enum Source: Equatable {
         case remote(URL)
         case localFile(URL)
+        case asset(String)
     }
 
     let source: Source
@@ -49,6 +50,9 @@ struct PdfOpenRequest: Equatable {
             url = remote
         case .localFile(let local):
             url = local
+        case .asset(let path):
+            let name = (path as NSString).lastPathComponent
+            return name.isEmpty ? "PDF" : name
         }
         let name = url.lastPathComponent
         return name.isEmpty ? "PDF" : name
@@ -75,66 +79,70 @@ struct PdfOpenRequest: Equatable {
         )
     }
 
-    static func parseFile(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
-        let url = try readString(rawURL, name: "url")
-        guard schemeOf(url) == "file", let parsed = URL(string: url) else {
-            throw PdfViewerError.invalidSource("url must be a file:// URI.")
-        }
-        if parsed.path.isEmpty {
-            throw PdfViewerError.invalidSource("The file:// URI could not be parsed.")
-        }
-        return try make(
-            source: .localFile(URL(fileURLWithPath: parsed.path)),
-            title: rawTitle,
-            page: rawPage,
-            headers: [:]
-        )
-    }
-
-    static func parseCapacitorFile(
-        url rawURL: Any?,
-        title rawTitle: Any?,
-        page rawPage: Any?
-    ) throws -> PdfOpenRequest {
-        let url = try readString(rawURL, name: "url")
-        guard let marker = url.range(of: capacitorFileMarker) else {
-            throw PdfViewerError.invalidSource("url must be a Capacitor file URL containing _capacitor_file_.")
-        }
-        let rawPath = String(url[marker.upperBound...])
-        let cut = rawPath.components(separatedBy: "?").first?.components(separatedBy: "#").first ?? rawPath
-        let path = cut.removingPercentEncoding ?? cut
-        guard path.hasPrefix("/") else {
-            throw PdfViewerError.invalidSource("The Capacitor file URL did not contain an absolute path.")
-        }
-        return try make(
-            source: .localFile(URL(fileURLWithPath: path)),
-            title: rawTitle,
-            page: rawPage,
-            headers: [:]
-        )
-    }
-
-    static func parsePath(path rawPath: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
-        let path = try readString(rawPath, name: "path")
-        guard path.hasPrefix("/"), !path.hasPrefix("//") else {
-            throw PdfViewerError.invalidSource("path must be an absolute filesystem path.")
-        }
-        return try make(
-            source: .localFile(URL(fileURLWithPath: path)),
-            title: rawTitle,
-            page: rawPage,
-            headers: [:]
-        )
-    }
-
-    static func parseContent(uri rawURI: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+    static func parseUri(uri rawURI: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
         let uri = try readString(rawURI, name: "uri")
-        guard schemeOf(uri) == "content" else {
-            throw PdfViewerError.invalidSource("uri must be a content:// URI.")
+        if let marker = uri.range(of: capacitorFileMarker) {
+            let rawPath = String(uri[marker.upperBound...])
+            let cut = rawPath.components(separatedBy: "?").first?.components(separatedBy: "#").first ?? rawPath
+            let path = cut.removingPercentEncoding ?? cut
+            guard path.hasPrefix("/") else {
+                throw PdfViewerError.invalidSource("The Capacitor file URL did not contain an absolute path.")
+            }
+            return try make(
+                source: .localFile(URL(fileURLWithPath: path)),
+                title: rawTitle,
+                page: rawPage,
+                headers: [:]
+            )
         }
-        _ = try readTitle(rawTitle)
-        _ = try readPage(rawPage)
-        throw PdfViewerError.unavailable("content:// URIs are only supported on Android.")
+        if schemeOf(uri) == "file" {
+            guard let parsed = URL(string: uri), !parsed.path.isEmpty else {
+                throw PdfViewerError.invalidSource("The file:// URI could not be parsed.")
+            }
+            return try make(
+                source: .localFile(URL(fileURLWithPath: parsed.path)),
+                title: rawTitle,
+                page: rawPage,
+                headers: [:]
+            )
+        }
+        if schemeOf(uri) == "content" {
+            _ = try readTitle(rawTitle)
+            _ = try readPage(rawPage)
+            throw PdfViewerError.unavailable("content:// URIs are only supported on Android.")
+        }
+        if schemeOf(uri) == nil, uri.hasPrefix("/"), !uri.hasPrefix("//") {
+            return try make(
+                source: .localFile(URL(fileURLWithPath: uri)),
+                title: rawTitle,
+                page: rawPage,
+                headers: [:]
+            )
+        }
+        throw PdfViewerError.invalidSource(uriMessage)
+    }
+
+    static func parseAsset(path rawPath: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
+        let path = try normalizeAssetPath(try readString(rawPath, name: "path"))
+        return try make(source: .asset(path), title: rawTitle, page: rawPage, headers: [:])
+    }
+
+    static func resolveAsset(_ request: PdfOpenRequest, root: URL) throws -> PdfOpenRequest {
+        guard case .asset(let path) = request.source else {
+            return request
+        }
+        let rootURL = root.standardizedFileURL
+        let fileURL = rootURL.appendingPathComponent(path).standardizedFileURL
+        let rootPath = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
+        guard fileURL.path.hasPrefix(rootPath) else {
+            throw PdfViewerError.invalidSource("path must stay inside the app assets.")
+        }
+        return PdfOpenRequest(
+            source: .localFile(fileURL),
+            title: request.title,
+            page: request.page,
+            headers: [:]
+        )
     }
 
     private static func make(
@@ -153,6 +161,9 @@ struct PdfOpenRequest: Equatable {
 }
 
 private let capacitorFileMarker = "/_capacitor_file_"
+private let uriMessage =
+    "uri must be a file:// URI, a content:// URI, a Capacitor file URL, or an absolute filesystem path."
+private let assetMessage = "path must be a relative path inside the app assets."
 private let headerNamePattern = "^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$"
 private let schemePattern = "^([a-zA-Z][a-zA-Z0-9+.-]*):"
 private let pageMessage = "page must be an integer greater than or equal to 1."
@@ -172,6 +183,30 @@ private func schemeOf(_ value: String) -> String? {
         return nil
     }
     return String(value[match].dropLast()).lowercased()
+}
+
+private func normalizeAssetPath(_ value: String) throws -> String {
+    if schemeOf(value) != nil || value.contains("\\") || value.contains("\0") {
+        throw PdfViewerError.invalidSource(assetMessage)
+    }
+    var path = value
+    if path.hasPrefix("/") {
+        if path.hasPrefix("//") {
+            throw PdfViewerError.invalidSource(assetMessage)
+        }
+        path.removeFirst()
+    }
+    while path.hasPrefix("./") {
+        path.removeFirst(2)
+    }
+    if path.isEmpty {
+        throw PdfViewerError.invalidSource(assetMessage)
+    }
+    let parts = path.split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+    if parts.contains(where: { $0.isEmpty || $0 == "." || $0 == ".." }) {
+        throw PdfViewerError.invalidSource(assetMessage)
+    }
+    return parts.joined(separator: "/")
 }
 
 private func isHttpURL(_ value: String) -> Bool {

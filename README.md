@@ -38,10 +38,8 @@ await PdfViewer.openUrl({
 <docgen-index>
 
 * [`openUrl(...)`](#openurl)
-* [`openFile(...)`](#openfile)
-* [`openCapacitorFile(...)`](#opencapacitorfile)
-* [`openPath(...)`](#openpath)
-* [`openContent(...)`](#opencontent)
+* [`openUri(...)`](#openuri)
+* [`openAsset(...)`](#openasset)
 * [`close()`](#close)
 * [`addListener('closed', ...)`](#addlistenerclosed-)
 * [`addListener('pageChanged', ...)`](#addlistenerpagechanged-)
@@ -78,70 +76,39 @@ share. The file is downloaded with `headers` before it is shown.
 --------------------
 
 
-### openFile(...)
+### openUri(...)
 
 ```typescript
-openFile(options: OpenFileOptions) => Promise<void>
+openUri(options: OpenUriOptions) => Promise<void>
 ```
 
-Open a `file://` PDF.
+Open a local PDF from a URI or an absolute filesystem path.
 
-iOS and Android only.
+Resolves once the first page is visible. Rejects if the file cannot be
+read, the requested page does not exist, or a viewer is already open.
 
-| Param         | Type                                                        |
-| ------------- | ----------------------------------------------------------- |
-| **`options`** | <code><a href="#openfileoptions">OpenFileOptions</a></code> |
+| Param         | Type                                                      |
+| ------------- | --------------------------------------------------------- |
+| **`options`** | <code><a href="#openurioptions">OpenUriOptions</a></code> |
 
 --------------------
 
 
-### openCapacitorFile(...)
+### openAsset(...)
 
 ```typescript
-openCapacitorFile(options: OpenCapacitorFileOptions) => Promise<void>
+openAsset(options: OpenAssetOptions) => Promise<void>
 ```
 
-Open a Capacitor converted file URL containing `_capacitor_file_`.
+Open a PDF shipped with the app.
 
-iOS and Android only.
+The path is relative to the web asset directory. On iOS the file is read
+from the app bundle. On Android it is copied out of `assets` before it
+is shown.
 
-| Param         | Type                                                                          |
-| ------------- | ----------------------------------------------------------------------------- |
-| **`options`** | <code><a href="#opencapacitorfileoptions">OpenCapacitorFileOptions</a></code> |
-
---------------------
-
-
-### openPath(...)
-
-```typescript
-openPath(options: OpenPathOptions) => Promise<void>
-```
-
-Open a PDF from an absolute filesystem path.
-
-iOS and Android only.
-
-| Param         | Type                                                        |
-| ------------- | ----------------------------------------------------------- |
-| **`options`** | <code><a href="#openpathoptions">OpenPathOptions</a></code> |
-
---------------------
-
-
-### openContent(...)
-
-```typescript
-openContent(options: OpenContentOptions) => Promise<void>
-```
-
-Open a PDF from an Android `content://` URI.
-
-Android only. Rejects with `UNAVAILABLE` on iOS.
-
-| Param         | Type                                                              |
-| ------------- | ----------------------------------------------------------------- |
-| **`options`** | <code><a href="#opencontentoptions">OpenContentOptions</a></code> |
+| Param         | Type                                                          |
+| ------------- | ------------------------------------------------------------- |
+| **`options`** | <code><a href="#openassetoptions">OpenAssetOptions</a></code> |
 
 --------------------
 
@@ -228,48 +195,26 @@ Options for `PdfViewer.openUrl()`.
 | **`headers`** | <code><a href="#record">Record</a>&lt;string, string&gt;</code> | Extra HTTP headers sent when downloading the PDF. Names must be HTTP header tokens and values must be strings without CR or LF.                         |                |
 
 
-#### OpenFileOptions
+#### OpenUriOptions
 
-Options for `PdfViewer.openFile()`.
+Options for `PdfViewer.openUri()`.
 
-| Prop        | Type                | Description                                                                                       | Default        |
-| ----------- | ------------------- | ------------------------------------------------------------------------------------------------- | -------------- |
-| **`url`**   | <code>string</code> | Local PDF as a `file://` URI. iOS and Android only. The file must already be readable by the app. |                |
-| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.           |                |
-| **`page`**  | <code>number</code> | 1-based page to show first.                                                                       | <code>1</code> |
-
-
-#### OpenCapacitorFileOptions
-
-Options for `PdfViewer.openCapacitorFile()`.
-
-| Prop        | Type                | Description                                                                                                                              | Default        |
-| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **`url`**   | <code>string</code> | Local PDF as a Capacitor converted file URL. The URL must contain `_capacitor_file_` followed by an absolute path. iOS and Android only. |                |
-| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                  |                |
-| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                              | <code>1</code> |
+| Prop        | Type                | Description                                                                                                                                                                                                                                                                                                         | Default        |
+| ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`uri`**   | <code>string</code> | Local PDF the app is allowed to read. A `file://` URI, an Android `content://` URI, a Capacitor file URL containing `_capacitor_file_`, or an absolute filesystem path such as `/var/mobile/Documents/report.pdf`. `content://` URIs are copied into the app cache on Android and reject with `UNAVAILABLE` on iOS. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                                                                                                                                                                                             |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                                                                                                                                                                                                         | <code>1</code> |
 
 
-#### OpenPathOptions
+#### OpenAssetOptions
 
-Options for `PdfViewer.openPath()`.
+Options for `PdfViewer.openAsset()`.
 
-| Prop        | Type                | Description                                                                                 | Default        |
-| ----------- | ------------------- | ------------------------------------------------------------------------------------------- | -------------- |
-| **`path`**  | <code>string</code> | Absolute filesystem path, such as `/var/mobile/Documents/report.pdf`. iOS and Android only. |                |
-| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.     |                |
-| **`page`**  | <code>number</code> | 1-based page to show first.                                                                 | <code>1</code> |
-
-
-#### OpenContentOptions
-
-Options for `PdfViewer.openContent()`.
-
-| Prop        | Type                | Description                                                                                                                  | Default        |
-| ----------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| **`uri`**   | <code>string</code> | Android `content://` URI the app is allowed to read. Android only. The file is copied into the app cache before it is shown. |                |
-| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                      |                |
-| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                  | <code>1</code> |
+| Prop        | Type                | Description                                                                                                                                                                                              | Default        |
+| ----------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **`path`**  | <code>string</code> | PDF shipped with the app, relative to the web asset directory. `files/manual.pdf` reads the file at `public/files/manual.pdf` in the app bundle. A leading slash is ignored. `..` segments are rejected. |                |
+| **`title`** | <code>string</code> | Title shown in the viewer chrome. When omitted or blank, the viewer uses the file name.                                                                                                                  |                |
+| **`page`**  | <code>number</code> | 1-based page to show first.                                                                                                                                                                              | <code>1</code> |
 
 
 #### PluginListenerHandle

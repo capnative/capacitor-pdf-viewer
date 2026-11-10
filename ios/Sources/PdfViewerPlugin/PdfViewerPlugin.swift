@@ -7,10 +7,8 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "PdfViewer"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openFile", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openCapacitorFile", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openPath", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openContent", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openUri", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openAsset", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
 
@@ -28,43 +26,27 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    @objc func openFile(_ call: CAPPluginCall) {
+    @objc func openUri(_ call: CAPPluginCall) {
         present(call) {
-            try PdfOpenRequest.parseFile(
-                url: call.getValue("url"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openCapacitorFile(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parseCapacitorFile(
-                url: call.getValue("url"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openPath(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parsePath(
-                path: call.getValue("path"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openContent(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parseContent(
+            try PdfOpenRequest.parseUri(
                 uri: call.getValue("uri"),
                 title: call.getValue("title"),
                 page: call.getValue("page")
             )
+        }
+    }
+
+    @objc func openAsset(_ call: CAPPluginCall) {
+        present(call) { [weak self] in
+            let parsed = try PdfOpenRequest.parseAsset(
+                path: call.getValue("path"),
+                title: call.getValue("title"),
+                page: call.getValue("page")
+            )
+            guard let root = self?.bridge?.config.appLocation else {
+                throw PdfViewerError.unavailable("The app asset directory is not available.")
+            }
+            return try PdfOpenRequest.resolveAsset(parsed, root: root)
         }
     }
 

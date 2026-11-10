@@ -23,14 +23,15 @@ class PdfRequestsTest {
     }
 
     @Test
-    fun parsesEachLocalSourceOnItsOwnParser() {
+    fun parsesEachLocalUri() {
         assertEquals(
             PdfSource.LocalFile("/tmp/my file.pdf"),
-            PdfRequests.parseFile("file:///tmp/my%20file.pdf", null, 2).source,
+            PdfRequests.parseUri("file:///tmp/my%20file.pdf", null, 2).source,
         )
+        assertEquals(2, PdfRequests.parseUri("file:///tmp/my%20file.pdf", null, 2).page)
         assertEquals(
             PdfSource.LocalFile("/storage/emulated/0/a.pdf"),
-            PdfRequests.parseCapacitorFile(
+            PdfRequests.parseUri(
                 "https://localhost/_capacitor_file_/storage/emulated/0/a.pdf",
                 null,
                 null,
@@ -38,12 +39,19 @@ class PdfRequestsTest {
         )
         assertEquals(
             PdfSource.Content("content://com.example/docs/1"),
-            PdfRequests.parseContent("content://com.example/docs/1", null, null).source,
+            PdfRequests.parseUri("content://com.example/docs/1", null, null).source,
         )
         assertEquals(
             PdfSource.LocalFile("/sdcard/Download/a.pdf"),
-            PdfRequests.parsePath("/sdcard/Download/a.pdf", null, null).source,
+            PdfRequests.parseUri("/sdcard/Download/a.pdf", null, null).source,
         )
+    }
+
+    @Test
+    fun parsesAnAssetPathInsideTheWebDirectory() {
+        assertEquals(PdfSource.Asset("docs/guide.pdf"), PdfRequests.parseAsset(" /docs/guide.pdf ", null, 3).source)
+        assertEquals(3, PdfRequests.parseAsset("./files/manual.pdf", null, 3).page)
+        assertEquals("guide.pdf", PdfRequests.parseAsset("docs/guide.pdf", "  ", null).displayTitle)
     }
 
     @Test
@@ -60,9 +68,10 @@ class PdfRequestsTest {
             PdfError.INVALID_SOURCE,
             errorCode { PdfRequests.parseUrl("https://localhost/_capacitor_file_/a.pdf", null, null, null) },
         )
-        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseFile("https://example.com/a.pdf", null, null) })
-        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parsePath("./manual.pdf", null, null) })
-        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseContent("file:///tmp/a.pdf", null, null) })
+        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseUri("https://example.com/a.pdf", null, null) })
+        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseUri("manual.pdf", null, null) })
+        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseAsset("../secret.pdf", null, null) })
+        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseAsset("docs/../../etc/passwd", null, null) })
     }
 
     @Test

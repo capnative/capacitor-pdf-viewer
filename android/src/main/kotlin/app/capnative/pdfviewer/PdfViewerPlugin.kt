@@ -23,30 +23,22 @@ class PdfViewerPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun openFile(call: PluginCall) {
+    fun openUri(call: PluginCall) {
         open(call) {
-            PdfRequests.parseFile(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
+            PdfRequests.parseUri(rawOption(call, "uri"), rawOption(call, "title"), rawOption(call, "page"))
         }
     }
 
     @PluginMethod
-    fun openCapacitorFile(call: PluginCall) {
+    fun openAsset(call: PluginCall) {
         open(call) {
-            PdfRequests.parseCapacitorFile(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
-        }
-    }
-
-    @PluginMethod
-    fun openPath(call: PluginCall) {
-        open(call) {
-            PdfRequests.parsePath(rawOption(call, "path"), rawOption(call, "title"), rawOption(call, "page"))
-        }
-    }
-
-    @PluginMethod
-    fun openContent(call: PluginCall) {
-        open(call) {
-            PdfRequests.parseContent(rawOption(call, "uri"), rawOption(call, "title"), rawOption(call, "page"))
+            val parsed = PdfRequests.parseAsset(rawOption(call, "path"), rawOption(call, "title"), rawOption(call, "page"))
+            val root = try {
+                bridge.serverBasePath?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) {
+                null
+            }
+            parsed.copy(assetRoot = root ?: "public")
         }
     }
 

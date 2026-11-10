@@ -139,7 +139,7 @@ class PdfViewerActivity : AppCompatActivity() {
             var document: PdfRenderer? = null
             var pfd: ParcelFileDescriptor? = null
             try {
-                val materialized = PdfFiles.materialize(this, request.source, request.headers)
+                val materialized = PdfFiles.materialize(this, request.source, request.headers, request.assetRoot)
                 if (materialized.ownsFile) {
                     ownedFile = materialized.file
                 }

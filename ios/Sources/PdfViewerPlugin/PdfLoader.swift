@@ -17,6 +17,8 @@ enum PdfLoader {
             return LoadedPdf(fileURL: url, ownsFile: false)
         case .remote(let url):
             return try await download(url, headers: request.headers)
+        case .asset:
+            throw PdfViewerError.loadFailed("The PDF asset could not be read.")
         }
     }
 

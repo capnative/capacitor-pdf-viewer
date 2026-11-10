@@ -15,11 +15,17 @@ internal data class MaterializedPdf(
 )
 
 internal object PdfFiles {
-    fun materialize(context: Context, source: PdfSource, headers: Map<String, String>): MaterializedPdf {
+    fun materialize(
+        context: Context,
+        source: PdfSource,
+        headers: Map<String, String>,
+        assetRoot: String? = null,
+    ): MaterializedPdf {
         return when (source) {
             is PdfSource.Remote -> MaterializedPdf(download(context, source.url, headers), ownsFile = true)
             is PdfSource.LocalFile -> MaterializedPdf(requireReadable(source.path), ownsFile = false)
             is PdfSource.Content -> MaterializedPdf(copyContent(context, source.uri), ownsFile = true)
+            is PdfSource.Asset -> materializeAsset(context, source.path, assetRoot)
         }
     }
 
@@ -29,6 +35,48 @@ internal object PdfFiles {
             copyLimited(input, destination)
         }
         return destination
+    }
+
+    private fun materializeAsset(context: Context, path: String, assetRoot: String?): MaterializedPdf {
+        val root = assetRoot?.takeIf { it.isNotBlank() } ?: "public"
+        val rootFile = File(root)
+        if (rootFile.isDirectory) {
+            return MaterializedPdf(resolveInside(rootFile, path), ownsFile = false)
+        }
+        val assetPath = root.trim('/') + "/" + path
+        return MaterializedPdf(copyAsset(context, assetPath), ownsFile = true)
+    }
+
+    private fun resolveInside(root: File, relative: String): File {
+        val base = root.canonicalFile
+        val file = File(base, relative).canonicalFile
+        val basePath = if (base.path.endsWith(File.separator)) base.path else base.path + File.separator
+        if (file.path != base.path && !file.path.startsWith(basePath)) {
+            throw PdfRequestException(PdfError.INVALID_SOURCE, "path must stay inside the app assets.")
+        }
+        if (!file.isFile || !file.canRead()) {
+            throw PdfRequestException(PdfError.LOAD_ERROR, "The PDF asset could not be read.")
+        }
+        return file
+    }
+
+    private fun copyAsset(context: Context, assetPath: String): File {
+        val destination = createCacheFile(context)
+        try {
+            context.assets.open(assetPath).use { input ->
+                copyLimited(input, destination)
+            }
+            if (destination.length() == 0L) {
+                throw PdfRequestException(PdfError.LOAD_ERROR, "The PDF asset could not be read.")
+            }
+            return destination
+        } catch (error: PdfRequestException) {
+            destination.delete()
+            throw error
+        } catch (_: Exception) {
+            destination.delete()
+            throw PdfRequestException(PdfError.LOAD_ERROR, "The PDF asset could not be read.")
+        }
     }
 
     private fun requireReadable(path: String): File {

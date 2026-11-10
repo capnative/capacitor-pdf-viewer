@@ -1,10 +1,4 @@
-import type {
-  OpenCapacitorFileOptions,
-  OpenContentOptions,
-  OpenFileOptions,
-  OpenPathOptions,
-  OpenUrlOptions,
-} from './definitions';
+import type { OpenAssetOptions, OpenUriOptions, OpenUrlOptions } from './definitions';
 import { createPdfViewerError } from './errors';
 
 /** Downloads larger than this are rejected on every platform. */
@@ -17,7 +11,8 @@ const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 export type PdfSource =
   | { kind: 'remote'; url: string }
   | { kind: 'local-file'; path: string }
-  | { kind: 'content'; url: string };
+  | { kind: 'content'; url: string }
+  | { kind: 'asset'; path: string };
 
 export interface ParsedOpenRequest {
   source: PdfSource;
@@ -43,60 +38,53 @@ export function parseOpenUrl(options: OpenUrlOptions | null | undefined): Parsed
   };
 }
 
-/** Validate `openFile()` options. The result is a filesystem path. */
-export function parseOpenFile(options: OpenFileOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const url = readString(raw, 'url');
-  if (schemeOf(url) !== 'file') {
-    throw createPdfViewerError('INVALID_SOURCE', 'url must be a file:// URI.');
-  }
-  return {
-    source: { kind: 'local-file', path: fileUrlToPath(url) },
-    ...readChrome(raw),
-  };
-}
+const URI_MESSAGE =
+  'uri must be a file:// URI, a content:// URI, a Capacitor file URL, or an absolute filesystem path.';
 
-/** Validate `openCapacitorFile()` options. The result is a filesystem path. */
-export function parseOpenCapacitorFile(options: OpenCapacitorFileOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const url = readString(raw, 'url');
-  const markerIndex = url.indexOf(CAPACITOR_FILE_MARKER);
-  if (markerIndex < 0) {
-    throw createPdfViewerError('INVALID_SOURCE', 'url must be a Capacitor file URL containing _capacitor_file_.');
-  }
-  const rawPath = url.slice(markerIndex + CAPACITOR_FILE_MARKER.length);
-  const path = decodePath(rawPath.split('?')[0]?.split('#')[0] ?? rawPath);
-  if (!path.startsWith('/')) {
-    throw createPdfViewerError('INVALID_SOURCE', 'The Capacitor file URL did not contain an absolute path.');
-  }
-  return {
-    source: { kind: 'local-file', path },
-    ...readChrome(raw),
-  };
-}
-
-/** Validate `openPath()` options. */
-export function parseOpenPath(options: OpenPathOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const path = readString(raw, 'path');
-  if (!path.startsWith('/') || path.startsWith('//')) {
-    throw createPdfViewerError('INVALID_SOURCE', 'path must be an absolute filesystem path.');
-  }
-  return {
-    source: { kind: 'local-file', path },
-    ...readChrome(raw),
-  };
-}
-
-/** Validate `openContent()` options. */
-export function parseOpenContent(options: OpenContentOptions | null | undefined): ParsedOpenRequest {
+/** Validate `openUri()` options. */
+export function parseOpenUri(options: OpenUriOptions | null | undefined): ParsedOpenRequest {
   const raw = readOptions(options);
   const uri = readString(raw, 'uri');
-  if (schemeOf(uri) !== 'content') {
-    throw createPdfViewerError('INVALID_SOURCE', 'uri must be a content:// URI.');
+  const markerIndex = uri.indexOf(CAPACITOR_FILE_MARKER);
+  if (markerIndex >= 0) {
+    const rawPath = uri.slice(markerIndex + CAPACITOR_FILE_MARKER.length);
+    const path = decodePath(rawPath.split('?')[0]?.split('#')[0] ?? rawPath);
+    if (!path.startsWith('/')) {
+      throw createPdfViewerError('INVALID_SOURCE', 'The Capacitor file URL did not contain an absolute path.');
+    }
+    return {
+      source: { kind: 'local-file', path },
+      ...readChrome(raw),
+    };
   }
+
+  const scheme = schemeOf(uri);
+  if (scheme === 'file') {
+    return {
+      source: { kind: 'local-file', path: fileUrlToPath(uri) },
+      ...readChrome(raw),
+    };
+  }
+  if (scheme === 'content') {
+    return {
+      source: { kind: 'content', url: uri },
+      ...readChrome(raw),
+    };
+  }
+  if (!scheme && uri.startsWith('/') && !uri.startsWith('//')) {
+    return {
+      source: { kind: 'local-file', path: uri },
+      ...readChrome(raw),
+    };
+  }
+  throw createPdfViewerError('INVALID_SOURCE', URI_MESSAGE);
+}
+
+/** Validate `openAsset()` options. The result is a path inside the web asset directory. */
+export function parseOpenAsset(options: OpenAssetOptions | null | undefined): ParsedOpenRequest {
+  const raw = readOptions(options);
   return {
-    source: { kind: 'content', url: uri },
+    source: { kind: 'asset', path: normalizeAssetPath(readString(raw, 'path')) },
     ...readChrome(raw),
   };
 }
@@ -180,6 +168,27 @@ function schemeOf(url: string): string | undefined {
 function isHttpUrl(url: string): boolean {
   const scheme = schemeOf(url);
   return scheme === 'http' || scheme === 'https';
+}
+
+function normalizeAssetPath(value: string): string {
+  if (schemeOf(value) || value.includes('\\') || value.includes('\0')) {
+    throw createPdfViewerError('INVALID_SOURCE', 'path must be a relative path inside the app assets.');
+  }
+  let path = value;
+  if (path.startsWith('/')) {
+    if (path.startsWith('//')) {
+      throw createPdfViewerError('INVALID_SOURCE', 'path must be a relative path inside the app assets.');
+    }
+    path = path.slice(1);
+  }
+  while (path.startsWith('./')) {
+    path = path.slice(2);
+  }
+  const parts = path.split('/');
+  if (path.length === 0 || parts.some((part) => part.length === 0 || part === '.' || part === '..')) {
+    throw createPdfViewerError('INVALID_SOURCE', 'path must be a relative path inside the app assets.');
+  }
+  return parts.join('/');
 }
 
 function fileUrlToPath(url: string): string {

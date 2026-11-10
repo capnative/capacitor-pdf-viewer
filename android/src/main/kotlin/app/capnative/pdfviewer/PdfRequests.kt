@@ -27,6 +27,8 @@ internal sealed class PdfSource {
     data class LocalFile(val path: String) : PdfSource()
 
     data class Content(val uri: String) : PdfSource()
+
+    data class Asset(val path: String) : PdfSource()
 }
 
 internal data class PdfOpenRequest(
@@ -34,6 +36,7 @@ internal data class PdfOpenRequest(
     val title: String?,
     val page: Int,
     val headers: Map<String, String>,
+    val assetRoot: String? = null,
 ) {
     val displayTitle: String
         get() {
@@ -42,6 +45,7 @@ internal data class PdfOpenRequest(
                 is PdfSource.Remote -> current.url
                 is PdfSource.LocalFile -> current.path
                 is PdfSource.Content -> current.uri
+                is PdfSource.Asset -> current.path
             }
             val segment = raw.substringBefore('?').substringBefore('#').substringAfterLast('/')
             if (segment.isEmpty()) {
@@ -60,6 +64,9 @@ internal data class PdfOpenRequest(
  */
 internal object PdfRequests {
     private const val CAPACITOR_FILE_MARKER = "/_capacitor_file_"
+    private const val URI_MESSAGE =
+        "uri must be a file:// URI, a content:// URI, a Capacitor file URL, or an absolute filesystem path."
+    private const val ASSET_MESSAGE = "path must be a relative path inside the app assets."
     private val headerName = Regex("^[!#$%&'*+\\-.^_`|~0-9A-Za-z]+$")
     private val schemePattern = Regex("^([a-zA-Z][a-zA-Z0-9+.-]*):")
 
@@ -76,57 +83,45 @@ internal object PdfRequests {
         return request(PdfSource.Remote(value), title, page, readHeaders(headers))
     }
 
-    fun parseFile(url: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(url, "url")
-        if (scheme(value) != "file") {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "url must be a file:// URI.")
-        }
-        val uri = try {
-            URI(value)
-        } catch (_: Exception) {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "The file:// URI could not be parsed.")
-        }
-        val path = uri.path
-        if (path.isNullOrEmpty()) {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "The file:// URI could not be parsed.")
-        }
-        return request(PdfSource.LocalFile(path), title, page, emptyMap())
-    }
-
-    fun parseCapacitorFile(url: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(url, "url")
-        val markerIndex = value.indexOf(CAPACITOR_FILE_MARKER)
-        if (markerIndex < 0) {
-            throw PdfRequestException(
-                PdfError.INVALID_SOURCE,
-                "url must be a Capacitor file URL containing _capacitor_file_.",
-            )
-        }
-        val rawPath = value.substring(markerIndex + CAPACITOR_FILE_MARKER.length)
-        val path = decodePath(rawPath.substringBefore('?').substringBefore('#'))
-        if (!path.startsWith("/")) {
-            throw PdfRequestException(
-                PdfError.INVALID_SOURCE,
-                "The Capacitor file URL did not contain an absolute path.",
-            )
-        }
-        return request(PdfSource.LocalFile(path), title, page, emptyMap())
-    }
-
-    fun parsePath(path: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(path, "path")
-        if (!value.startsWith("/") || value.startsWith("//")) {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "path must be an absolute filesystem path.")
-        }
-        return request(PdfSource.LocalFile(value), title, page, emptyMap())
-    }
-
-    fun parseContent(uri: Any?, title: Any?, page: Any?): PdfOpenRequest {
+    fun parseUri(uri: Any?, title: Any?, page: Any?): PdfOpenRequest {
         val value = readString(uri, "uri")
-        if (scheme(value) != "content") {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "uri must be a content:// URI.")
+        val markerIndex = value.indexOf(CAPACITOR_FILE_MARKER)
+        if (markerIndex >= 0) {
+            val rawPath = value.substring(markerIndex + CAPACITOR_FILE_MARKER.length)
+            val path = decodePath(rawPath.substringBefore('?').substringBefore('#'))
+            if (!path.startsWith("/")) {
+                throw PdfRequestException(
+                    PdfError.INVALID_SOURCE,
+                    "The Capacitor file URL did not contain an absolute path.",
+                )
+            }
+            return request(PdfSource.LocalFile(path), title, page, emptyMap())
         }
-        return request(PdfSource.Content(value), title, page, emptyMap())
+        when (scheme(value)) {
+            "file" -> {
+                val parsed = try {
+                    URI(value)
+                } catch (_: Exception) {
+                    throw PdfRequestException(PdfError.INVALID_SOURCE, "The file:// URI could not be parsed.")
+                }
+                val path = parsed.path
+                if (path.isNullOrEmpty()) {
+                    throw PdfRequestException(PdfError.INVALID_SOURCE, "The file:// URI could not be parsed.")
+                }
+                return request(PdfSource.LocalFile(path), title, page, emptyMap())
+            }
+            "content" -> return request(PdfSource.Content(value), title, page, emptyMap())
+            null -> {
+                if (value.startsWith("/") && !value.startsWith("//")) {
+                    return request(PdfSource.LocalFile(value), title, page, emptyMap())
+                }
+            }
+        }
+        throw PdfRequestException(PdfError.INVALID_SOURCE, URI_MESSAGE)
+    }
+
+    fun parseAsset(path: Any?, title: Any?, page: Any?): PdfOpenRequest {
+        return request(PdfSource.Asset(normalizeAssetPath(readString(path, "path"))), title, page, emptyMap())
     }
 
     private fun request(
@@ -211,6 +206,30 @@ internal object PdfRequests {
     private fun isHttpUrl(value: String): Boolean {
         val scheme = scheme(value)
         return scheme == "http" || scheme == "https"
+    }
+
+    private fun normalizeAssetPath(value: String): String {
+        if (scheme(value) != null || value.contains('\\') || value.contains('\u0000')) {
+            throw PdfRequestException(PdfError.INVALID_SOURCE, ASSET_MESSAGE)
+        }
+        var path = value
+        if (path.startsWith("/")) {
+            if (path.startsWith("//")) {
+                throw PdfRequestException(PdfError.INVALID_SOURCE, ASSET_MESSAGE)
+            }
+            path = path.substring(1)
+        }
+        while (path.startsWith("./")) {
+            path = path.substring(2)
+        }
+        if (path.isEmpty()) {
+            throw PdfRequestException(PdfError.INVALID_SOURCE, ASSET_MESSAGE)
+        }
+        val parts = path.split('/')
+        if (parts.any { it.isEmpty() || it == "." || it == ".." }) {
+            throw PdfRequestException(PdfError.INVALID_SOURCE, ASSET_MESSAGE)
+        }
+        return parts.joinToString("/")
     }
 
     private fun decodePath(value: String): String {
