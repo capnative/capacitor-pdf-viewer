@@ -23,92 +23,16 @@ npm install @capnative/capacitor-pdf-viewer
 npx cap sync
 ```
 
-Peer dependency: `@capacitor/core >= 8.0.0`.
-
 ## Basic usage
 
 ```typescript
 import { PdfViewer } from '@capnative/capacitor-pdf-viewer';
 
-await PdfViewer.addListener('pageChanged', (event) => {
-  console.log(`Page ${event.page} of ${event.pageCount}`);
-});
-
-const closed = await PdfViewer.addListener('closed', (event) => {
-  console.log(`Closed on page ${event.page}`);
-});
-
 await PdfViewer.openUrl({
   url: 'https://example.com/manual.pdf',
   title: 'Manual',
-  page: 2,
-  headers: {
-    Authorization: 'Bearer token',
-  },
 });
-
-await PdfViewer.close();
-await closed.remove();
 ```
-
-Each source has its own method. Pass a `file://` URI from `@capacitor/filesystem` to `openFile()`:
-
-```typescript
-import { Directory, Filesystem } from '@capacitor/filesystem';
-import { PdfViewer } from '@capnative/capacitor-pdf-viewer';
-
-const { uri } = await Filesystem.getUri({
-  path: 'report.pdf',
-  directory: Directory.Documents,
-});
-
-await PdfViewer.openFile({ url: uri });
-```
-
-| Method | Source | Platforms |
-| --- | --- | --- |
-| `openUrl` | `http:` and `https:` | iOS, Android, Web |
-| `openFile` | `file://` | iOS, Android |
-| `openCapacitorFile` | Capacitor URL containing `_capacitor_file_` | iOS, Android |
-| `openPath` | Absolute filesystem path | iOS, Android |
-| `openContent` | `content://` | Android |
-| `openWebPath` | Root-relative (`/files/a.pdf`) or dot-relative (`./a.pdf`) URL | Web |
-| `openBlob` | `blob:` | Web |
-| `openData` | `data:` | Web |
-
-A method rejects with `INVALID_SOURCE` when the value is the wrong kind. Calling a method on a platform that cannot open that source rejects with `UNAVAILABLE`.
-
-Every open method resolves when the first page is visible. It rejects if the file cannot be loaded or a viewer is already open. Call `close()` and wait for `closed` before opening another document.
-
-## Platform setup
-
-No extra Capacitor config block is required.
-
-### iOS
-
-The viewer is a presented `UINavigationController` hosting a PDFKit `PDFView`. Pinch-zoom, continuous vertical scrolling, and page navigation come from PDFKit. The navigation bar has Done, a search field, and the system share sheet. Search jumps between case-insensitive matches.
-
-The plugin does not add `Info.plist` keys. `openUrl()` with `https` works with the default App Transport Security policy. Plain `http` needs an App Transport Security exception in the host app. `openFile()`, `openCapacitorFile()`, and `openPath()` require a file the app sandbox can already read (app documents, cache, or a file the app has security-scoped access to). `openContent()` is not supported on iOS.
-
-Minimum version is iOS 15.
-
-### Android
-
-The viewer is an in-app `Activity`. It uses the platform `android.graphics.pdf.PdfRenderer` (available since API 21) rather than handing the file to another app.
-
-`androidx.pdf:pdf-viewer-fragment` was considered and not used. As of the 1.0.0-beta01 release it is still beta, and it requires a higher minimum SDK than Capacitor 8 (API 24). `PdfRenderer` keeps the plugin free of extra native libraries and runs on every Android version Capacitor supports. The activity renders the current page to a bitmap (up to 2× the screen width, capped for memory), then supports pinch-zoom, pan, previous/next, horizontal swipes, and share. Text search is not available from `PdfRenderer`; search is iOS-only.
-
-The plugin manifest merges `android.permission.INTERNET` and a `FileProvider` used only for the share sheet (`${applicationId}.pdfviewer.fileprovider`). Capacitor apps already include `INTERNET`. Plain `http` URLs passed to `openUrl()` also need the host app to allow cleartext traffic. `openContent()` copies the `content://` URI into the app cache and requires a URI the app is allowed to read. `openPath()` is limited to files the app can already read under scoped storage.
-
-Minimum version is API 24.
-
-### Web
-
-`openUrl()`, `openWebPath()`, `openBlob()`, and `openData()` install a full-screen overlay with the PDF in an iframe, plus Done and Open. Open leaves the overlay in place and loads the original URL in a new tab, which is the fallback when a browser will not paint a PDF inside a frame.
-
-`openUrl()` downloads the file with `fetch` so `headers` are applied, then displays it from a blob URL. If that fetch fails and no custom headers were set, the original URL is embedded directly. Custom headers cannot be applied when the server does not allow the cross-origin fetch. `openWebPath()`, `openBlob()`, and `openData()` embed the source directly. `pageChanged` is not emitted on the web. A root-relative path belongs to `openWebPath()`; an absolute filesystem path belongs to `openPath()`.
-
-`openFile()`, `openCapacitorFile()`, `openPath()`, and `openContent()` reject with `UNAVAILABLE` on the web.
 
 ## API
 
@@ -473,7 +397,9 @@ iOS and Android only. The web viewer does not emit this event.
 
 Construct a type with a set of properties K of type T
 
-<code>{ [P in K]: T; }</code>
+<code>{
+ [P in K]: T;
+ }</code>
 
 </docgen-api>
 
@@ -491,12 +417,3 @@ Rejected calls include a stable `error.code`. Match on `code`, not on the messag
 | `ALREADY_OPEN` | iOS, Android, Web | An open method was called while a viewer is already open. |
 | `CANCELLED` | iOS, Android, Web | The viewer was dismissed before the document finished loading. |
 | `UNAVAILABLE` | iOS, Android, Web | The viewer cannot be presented, or that open method is not supported on that platform. |
-
-## Limitations
-
-- Password-protected PDFs are rejected. There is no password argument yet.
-- Android zoom is bitmap-based. It stays sharp up to the rendered resolution (about twice the screen width) and gets softer past that. Android does not search text.
-- The web viewer cannot report the current page, so `pageChanged` is native-only and `closed.pageCount` is omitted on web. `closed.page` on web is the requested start page.
-- Downloads larger than 200 MB are rejected on every platform.
-- iOS cannot be compiled in this repository's Linux CI. Verify the Swift package on a Mac with Xcode 15 or newer (`npm run verify:ios`).
-- Publishing to npm (`npm publish`) is a separate step. The package is scoped and `publishConfig.access` is `public`.
