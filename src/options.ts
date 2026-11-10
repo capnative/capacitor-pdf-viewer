@@ -1,12 +1,9 @@
 import type {
-  OpenBlobOptions,
   OpenCapacitorFileOptions,
   OpenContentOptions,
-  OpenDataOptions,
   OpenFileOptions,
   OpenPathOptions,
   OpenUrlOptions,
-  OpenWebPathOptions,
 } from './definitions';
 import { createPdfViewerError } from './errors';
 
@@ -20,9 +17,7 @@ const SCHEME = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
 export type PdfSource =
   | { kind: 'remote'; url: string }
   | { kind: 'local-file'; path: string }
-  | { kind: 'content'; url: string }
-  | { kind: 'web-path'; url: string }
-  | { kind: 'direct'; url: string };
+  | { kind: 'content'; url: string };
 
 export interface ParsedOpenRequest {
   source: PdfSource;
@@ -106,73 +101,6 @@ export function parseOpenContent(options: OpenContentOptions | null | undefined)
   };
 }
 
-/** Validate `openWebPath()` options. */
-export function parseOpenWebPath(options: OpenWebPathOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const path = readString(raw, 'path');
-  if (!isWebPath(path)) {
-    throw createPdfViewerError(
-      'INVALID_SOURCE',
-      'path must be a root-relative (/files/a.pdf) or dot-relative (./a.pdf) URL.',
-    );
-  }
-  return {
-    source: { kind: 'web-path', url: path },
-    ...readChrome(raw),
-  };
-}
-
-/** Validate `openBlob()` options. */
-export function parseOpenBlob(options: OpenBlobOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const url = readString(raw, 'url');
-  if (schemeOf(url) !== 'blob') {
-    throw createPdfViewerError('INVALID_SOURCE', 'url must be a blob: URL.');
-  }
-  return {
-    source: { kind: 'direct', url },
-    ...readChrome(raw),
-  };
-}
-
-/** Validate `openData()` options. */
-export function parseOpenData(options: OpenDataOptions | null | undefined): ParsedOpenRequest {
-  const raw = readOptions(options);
-  const url = readString(raw, 'url');
-  if (schemeOf(url) !== 'data') {
-    throw createPdfViewerError('INVALID_SOURCE', 'url must be a data: URL.');
-  }
-  return {
-    source: { kind: 'direct', url },
-    ...readChrome(raw),
-  };
-}
-
-export function viewerTitle(request: ParsedOpenRequest): string {
-  if (request.title) {
-    return request.title;
-  }
-
-  const raw = request.source.kind === 'local-file' ? request.source.path : request.source.url;
-  const withoutFragment = raw.split('#')[0] ?? raw;
-  const withoutQuery = withoutFragment.split('?')[0] ?? withoutFragment;
-  const segment = withoutQuery.substring(withoutQuery.lastIndexOf('/') + 1);
-  if (!segment) {
-    return 'PDF';
-  }
-
-  try {
-    return decodeURIComponent(segment);
-  } catch {
-    return segment;
-  }
-}
-
-export function withPageFragment(url: string, page: number): string {
-  const base = url.split('#')[0] ?? url;
-  return `${base}#page=${page}`;
-}
-
 function readOptions(options: object | null | undefined): Record<string, unknown> {
   if (options == null || typeof options !== 'object' || Array.isArray(options)) {
     throw createPdfViewerError('INVALID_SOURCE', 'options are required.');
@@ -252,13 +180,6 @@ function schemeOf(url: string): string | undefined {
 function isHttpUrl(url: string): boolean {
   const scheme = schemeOf(url);
   return scheme === 'http' || scheme === 'https';
-}
-
-function isWebPath(url: string): boolean {
-  if (schemeOf(url)) {
-    return false;
-  }
-  return (url.startsWith('/') && !url.startsWith('//')) || url.startsWith('./') || url.startsWith('../');
 }
 
 function fileUrlToPath(url: string): string {

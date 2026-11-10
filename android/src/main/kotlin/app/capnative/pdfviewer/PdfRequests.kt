@@ -57,7 +57,6 @@ internal data class PdfOpenRequest(
 
 /**
  * One parser per source type. Each parser accepts only that type.
- * Web-only types validate their input, then reject with UNAVAILABLE.
  */
 internal object PdfRequests {
     private const val CAPACITOR_FILE_MARKER = "/_capacitor_file_"
@@ -128,39 +127,6 @@ internal object PdfRequests {
             throw PdfRequestException(PdfError.INVALID_SOURCE, "uri must be a content:// URI.")
         }
         return request(PdfSource.Content(value), title, page, emptyMap())
-    }
-
-    fun parseWebPath(path: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(path, "path")
-        if (!isWebPath(value)) {
-            throw PdfRequestException(
-                PdfError.INVALID_SOURCE,
-                "path must be a root-relative (/files/a.pdf) or dot-relative (./a.pdf) URL.",
-            )
-        }
-        readTitle(title)
-        readPage(page)
-        throw PdfRequestException(PdfError.UNAVAILABLE, "Web paths are only supported on the web.")
-    }
-
-    fun parseBlob(url: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(url, "url")
-        if (scheme(value) != "blob") {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "url must be a blob: URL.")
-        }
-        readTitle(title)
-        readPage(page)
-        throw PdfRequestException(PdfError.UNAVAILABLE, "blob: URLs are only supported on the web.")
-    }
-
-    fun parseData(url: Any?, title: Any?, page: Any?): PdfOpenRequest {
-        val value = readString(url, "url")
-        if (scheme(value) != "data") {
-            throw PdfRequestException(PdfError.INVALID_SOURCE, "url must be a data: URL.")
-        }
-        readTitle(title)
-        readPage(page)
-        throw PdfRequestException(PdfError.UNAVAILABLE, "data: URLs are only supported on the web.")
     }
 
     private fun request(
@@ -245,15 +211,6 @@ internal object PdfRequests {
     private fun isHttpUrl(value: String): Boolean {
         val scheme = scheme(value)
         return scheme == "http" || scheme == "https"
-    }
-
-    private fun isWebPath(value: String): Boolean {
-        if (scheme(value) != null) {
-            return false
-        }
-        return (value.startsWith("/") && !value.startsWith("//")) ||
-            value.startsWith("./") ||
-            value.startsWith("../")
     }
 
     private fun decodePath(value: String): String {

@@ -50,27 +50,6 @@ class PdfViewerPlugin : Plugin() {
         }
     }
 
-    @PluginMethod
-    fun openWebPath(call: PluginCall) {
-        open(call) {
-            PdfRequests.parseWebPath(rawOption(call, "path"), rawOption(call, "title"), rawOption(call, "page"))
-        }
-    }
-
-    @PluginMethod
-    fun openBlob(call: PluginCall) {
-        open(call) {
-            PdfRequests.parseBlob(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
-        }
-    }
-
-    @PluginMethod
-    fun openData(call: PluginCall) {
-        open(call) {
-            PdfRequests.parseData(rawOption(call, "url"), rawOption(call, "title"), rawOption(call, "page"))
-        }
-    }
-
     private fun open(call: PluginCall, parse: () -> PdfOpenRequest) {
         val request = try {
             parse()

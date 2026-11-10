@@ -23,23 +23,23 @@ This guide provides instructions for contributing to this Capacitor plugin.
 
 #### `npm run build`
 
-Build the plugin web assets and generate plugin API documentation using [`@capacitor/docgen`](https://github.com/ionic-team/capacitor-docgen).
+Build the plugin package and generate plugin API documentation using [`@capacitor/docgen`](https://github.com/ionic-team/capacitor-docgen).
 
-It will compile the TypeScript code from `src/` into ESM JavaScript in `dist/esm/`. These files are used in apps with bundlers when your plugin is imported.
+It compiles the TypeScript code from `src/` into ESM JavaScript in `dist/esm/`. Apps with bundlers import these files.
 
-Then, Rollup will bundle the code into a single file at `dist/plugin.js`. This file is used in apps without bundlers by including it as a script in `index.html`.
+Then Rollup bundles the code into `dist/plugin.js` and `dist/plugin.cjs.js`.
 
 #### `npm run verify`
 
-Build and validate the web and native projects.
+Build the plugin package and validate the iOS and Android projects.
 
-This is useful to run in CI to verify that the plugin builds for all platforms.
+This is useful to run in CI to verify that the plugin builds for both platforms.
 
-`verify:ios` needs Xcode on macOS. `verify:android` needs a Java 21 JDK and Android SDK 36. `verify:web` is `npm run build`.
+`verify:ios` needs Xcode on macOS. `verify:android` needs a Java 21 JDK and Android SDK 36.
 
 #### `npm test`
 
-Run the web and option-parsing unit tests with Vitest.
+Run the option-parsing unit tests with Vitest.
 
 #### `npm run lint` / `npm run fmt`
 

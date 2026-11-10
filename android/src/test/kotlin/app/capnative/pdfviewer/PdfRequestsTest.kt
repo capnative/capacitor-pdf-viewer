@@ -63,11 +63,6 @@ class PdfRequestsTest {
         assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseFile("https://example.com/a.pdf", null, null) })
         assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parsePath("./manual.pdf", null, null) })
         assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseContent("file:///tmp/a.pdf", null, null) })
-        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseBlob("data:application/pdf;base64,AA==", null, null) })
-        assertEquals(PdfError.UNAVAILABLE, errorCode { PdfRequests.parseBlob("blob:https://localhost/uuid", null, null) })
-        assertEquals(PdfError.UNAVAILABLE, errorCode { PdfRequests.parseData("data:application/pdf;base64,AA==", null, null) })
-        assertEquals(PdfError.UNAVAILABLE, errorCode { PdfRequests.parseWebPath("./manual.pdf", null, null) })
-        assertEquals(PdfError.INVALID_SOURCE, errorCode { PdfRequests.parseWebPath("manual.pdf", null, null) })
     }
 
     @Test

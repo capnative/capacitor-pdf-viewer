@@ -55,10 +55,6 @@ final class PdfRequestTests: XCTestCase {
         XCTAssertEqual(errorCode { try PdfOpenRequest.parsePath(path: "./manual.pdf", title: nil, page: nil) }, "INVALID_SOURCE")
         XCTAssertEqual(errorCode { try PdfOpenRequest.parseContent(uri: "file:///tmp/a.pdf", title: nil, page: nil) }, "INVALID_SOURCE")
         XCTAssertEqual(errorCode { try PdfOpenRequest.parseContent(uri: "content://com.example/docs/1", title: nil, page: nil) }, "UNAVAILABLE")
-        XCTAssertEqual(errorCode { try PdfOpenRequest.parseBlob(url: "blob:https://localhost/uuid", title: nil, page: nil) }, "UNAVAILABLE")
-        XCTAssertEqual(errorCode { try PdfOpenRequest.parseData(url: "data:application/pdf;base64,AA==", title: nil, page: nil) }, "UNAVAILABLE")
-        XCTAssertEqual(errorCode { try PdfOpenRequest.parseWebPath(path: "./manual.pdf", title: nil, page: nil) }, "UNAVAILABLE")
-        XCTAssertEqual(errorCode { try PdfOpenRequest.parseWebPath(path: "manual.pdf", title: nil, page: nil) }, "INVALID_SOURCE")
     }
 
     func testRejectsUnsupportedSources() {

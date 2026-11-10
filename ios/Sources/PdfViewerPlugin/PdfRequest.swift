@@ -137,38 +137,6 @@ struct PdfOpenRequest: Equatable {
         throw PdfViewerError.unavailable("content:// URIs are only supported on Android.")
     }
 
-    static func parseWebPath(path rawPath: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
-        let path = try readString(rawPath, name: "path")
-        guard isWebPath(path) else {
-            throw PdfViewerError.invalidSource(
-                "path must be a root-relative (/files/a.pdf) or dot-relative (./a.pdf) URL."
-            )
-        }
-        _ = try readTitle(rawTitle)
-        _ = try readPage(rawPage)
-        throw PdfViewerError.unavailable("Web paths are only supported on the web.")
-    }
-
-    static func parseBlob(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
-        let url = try readString(rawURL, name: "url")
-        guard schemeOf(url) == "blob" else {
-            throw PdfViewerError.invalidSource("url must be a blob: URL.")
-        }
-        _ = try readTitle(rawTitle)
-        _ = try readPage(rawPage)
-        throw PdfViewerError.unavailable("blob: URLs are only supported on the web.")
-    }
-
-    static func parseData(url rawURL: Any?, title rawTitle: Any?, page rawPage: Any?) throws -> PdfOpenRequest {
-        let url = try readString(rawURL, name: "url")
-        guard schemeOf(url) == "data" else {
-            throw PdfViewerError.invalidSource("url must be a data: URL.")
-        }
-        _ = try readTitle(rawTitle)
-        _ = try readPage(rawPage)
-        throw PdfViewerError.unavailable("data: URLs are only supported on the web.")
-    }
-
     private static func make(
         source: Source,
         title rawTitle: Any?,
@@ -209,13 +177,6 @@ private func schemeOf(_ value: String) -> String? {
 private func isHttpURL(_ value: String) -> Bool {
     let scheme = schemeOf(value)
     return scheme == "http" || scheme == "https"
-}
-
-private func isWebPath(_ value: String) -> Bool {
-    if schemeOf(value) != nil {
-        return false
-    }
-    return (value.hasPrefix("/") && !value.hasPrefix("//")) || value.hasPrefix("./") || value.hasPrefix("../")
 }
 
 private func readTitle(_ value: Any?) throws -> String? {

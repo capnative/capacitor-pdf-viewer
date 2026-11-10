@@ -45,8 +45,7 @@ export interface OpenUrlOptions {
    * Extra HTTP headers sent when downloading the PDF.
    *
    * Names must be HTTP header tokens and values must be strings without CR
-   * or LF. On the web, headers are only applied when the browser can `fetch`
-   * the file (CORS).
+   * or LF.
    */
   headers?: Record<string, string>;
 }
@@ -111,8 +110,7 @@ export interface OpenPathOptions {
   /**
    * Absolute filesystem path, such as `/var/mobile/Documents/report.pdf`.
    *
-   * iOS and Android only. A leading `/` is not a website path; use
-   * `openWebPath()` for that.
+   * iOS and Android only.
    */
   path: string;
 
@@ -158,81 +156,6 @@ export interface OpenContentOptions {
 }
 
 /**
- * Options for `PdfViewer.openWebPath()`.
- */
-export interface OpenWebPathOptions {
-  /**
-   * Same-origin path on the web.
-   *
-   * A root-relative (`/files/a.pdf`) or dot-relative (`./a.pdf`, `../a.pdf`)
-   * URL. Web only.
-   */
-  path: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
- * Options for `PdfViewer.openBlob()`.
- */
-export interface OpenBlobOptions {
-  /**
-   * `blob:` URL. Web only.
-   */
-  url: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
- * Options for `PdfViewer.openData()`.
- */
-export interface OpenDataOptions {
-  /**
-   * `data:` URL. Web only.
-   */
-  url: string;
-
-  /**
-   * Title shown in the viewer chrome.
-   *
-   * When omitted or blank, the viewer uses the file name.
-   */
-  title?: string;
-
-  /**
-   * 1-based page to show first.
-   *
-   * @default 1
-   */
-  page?: number;
-}
-
-/**
  * Payload emitted when the viewer is dismissed after the document was shown.
  */
 export interface ViewerClosedEvent {
@@ -243,16 +166,12 @@ export interface ViewerClosedEvent {
 
   /**
    * Total number of pages.
-   *
-   * Omitted on web, where the embedded browser viewer does not report a page count.
    */
-  pageCount?: number;
+  pageCount: number;
 }
 
 /**
  * Payload emitted when the visible page changes, including the page the viewer opened on.
- *
- * iOS and Android only. The web viewer does not emit this event.
  */
 export interface PageChangedEvent {
   /**
@@ -277,59 +196,37 @@ export interface PdfViewerPlugin {
    * On iOS the viewer is a PDFKit `PDFView` with pinch-zoom, continuous
    * scrolling, text search, and the system share sheet. On Android it is an
    * in-app `PdfRenderer` activity with pinch-zoom, pan, page controls, and
-   * share. On the web it is a full-screen iframe overlay. The file is
-   * downloaded with `headers` before it is shown.
+   * share. The file is downloaded with `headers` before it is shown.
    */
   openUrl(options: OpenUrlOptions): Promise<void>;
 
   /**
    * Open a `file://` PDF.
    *
-   * iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+   * iOS and Android only.
    */
   openFile(options: OpenFileOptions): Promise<void>;
 
   /**
    * Open a Capacitor converted file URL containing `_capacitor_file_`.
    *
-   * iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+   * iOS and Android only.
    */
   openCapacitorFile(options: OpenCapacitorFileOptions): Promise<void>;
 
   /**
    * Open a PDF from an absolute filesystem path.
    *
-   * iOS and Android only. Rejects with `UNAVAILABLE` on the web.
+   * iOS and Android only.
    */
   openPath(options: OpenPathOptions): Promise<void>;
 
   /**
    * Open a PDF from an Android `content://` URI.
    *
-   * Android only. Rejects with `UNAVAILABLE` on iOS and web.
+   * Android only. Rejects with `UNAVAILABLE` on iOS.
    */
   openContent(options: OpenContentOptions): Promise<void>;
-
-  /**
-   * Open a root-relative or dot-relative PDF URL in the web viewer.
-   *
-   * Web only. Rejects with `UNAVAILABLE` on iOS and Android.
-   */
-  openWebPath(options: OpenWebPathOptions): Promise<void>;
-
-  /**
-   * Open a `blob:` PDF URL in the web viewer.
-   *
-   * Web only. Rejects with `UNAVAILABLE` on iOS and Android.
-   */
-  openBlob(options: OpenBlobOptions): Promise<void>;
-
-  /**
-   * Open a `data:` PDF URL in the web viewer.
-   *
-   * Web only. Rejects with `UNAVAILABLE` on iOS and Android.
-   */
-  openData(options: OpenDataOptions): Promise<void>;
 
   /**
    * Close the viewer if one is open.
@@ -349,9 +246,9 @@ export interface PdfViewerPlugin {
   addListener(eventName: 'closed', listenerFunc: (event: ViewerClosedEvent) => void): Promise<PluginListenerHandle>;
 
   /**
-   * Listen for page changes inside the native viewer.
+   * Listen for page changes inside the viewer.
    *
-   * The first event is the page the document opened on. Not emitted on web.
+   * The first event is the page the document opened on.
    */
   addListener(eventName: 'pageChanged', listenerFunc: (event: PageChangedEvent) => void): Promise<PluginListenerHandle>;
 

@@ -11,9 +11,6 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openCapacitorFile", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openPath", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openContent", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openWebPath", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openBlob", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openData", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "close", returnType: CAPPluginReturnPromise),
     ]
 
@@ -65,36 +62,6 @@ public class PdfViewerPlugin: CAPPlugin, CAPBridgedPlugin {
         present(call) {
             try PdfOpenRequest.parseContent(
                 uri: call.getValue("uri"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openWebPath(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parseWebPath(
-                path: call.getValue("path"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openBlob(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parseBlob(
-                url: call.getValue("url"),
-                title: call.getValue("title"),
-                page: call.getValue("page")
-            )
-        }
-    }
-
-    @objc func openData(_ call: CAPPluginCall) {
-        present(call) {
-            try PdfOpenRequest.parseData(
-                url: call.getValue("url"),
                 title: call.getValue("title"),
                 page: call.getValue("page")
             )
